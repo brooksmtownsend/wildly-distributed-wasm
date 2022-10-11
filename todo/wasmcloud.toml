@@ -1,0 +1,7 @@
+name = "todo"
+language = "rust"
+type = "actor"
+version = "0.1.0"
+
+[actor]
+claims = ["wasmcloud:messaging", "wasmcloud:httpserver", "wasmcloud:builtin:logging"]
