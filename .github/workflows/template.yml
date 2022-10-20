@@ -1,21 +1,21 @@
-# Simply replace the text dist-kv with the path to your actor in this repo, or `./` if you're in the root
-name: Release dist-kv to GHCR
+# Simply replace the text ACTOR_PATH with the path to your actor in this repo, or `./` if you're in the root
+name: Release ACTOR_PATH to GHCR
 on:
   workflow_dispatch:
   push:
     branches: [main]
     paths:
-      - "dist-kv/**"
-      - "dist-kv/src/**"
-      - "dist-kv/Cargo.*"
+      - "ACTOR_PATH/**"
+      - "ACTOR_PATH/src/**"
+      - "ACTOR_PATH/Cargo.*"
     tags:
-      - "dist-kv-v*"
+      - "v*"
 env:
   # For the release action, you'll have to set the following variables
   WASH_ISSUER_KEY: ${{ secrets.WASH_ISSUER_KEY }}
   WASH_SUBJECT_KEY: ${{ secrets.WASH_DISTKV_SUBJECT_KEY }}
   WASMCLOUD_PAT: ${{ secrets.WASMCLOUD_PAT }}
-  working-directory: dist-kv
+  working-directory: ACTOR_PATH
 jobs:
   build_signed_actor:
     runs-on: ubuntu-latest
