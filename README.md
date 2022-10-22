@@ -11,9 +11,10 @@ An absurd demo
 
 ## TODO
 
-- [ ] Make redis KV take config JSON too as input so I can configure each cloud redis to talk to their respective store
-- [ ] Implement the remaining operations on the TODO app
-- [ ] Test to ensure leaf nodes work properly with the whole local invocation thing
+- [ ] Implement the remaining operations on the TODO app (get all, delete, delete all, update)
+- [ ] Build frontend into an actor, deploy actor
+- [ ] Write up README with appropriate scripts
+- [ ] Launch DBs in various hosts
 
 ## What does this not have?
 

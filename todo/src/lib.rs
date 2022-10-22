@@ -63,7 +63,7 @@ async fn create_todo(ctx: &Context, input: InputTodo) -> Result<Todo> {
 
     //TODO: this won't work for any title that's not a single word or whatever
     let todo = Todo::new(
-        format!("/api/{}", input.title),
+        format!("/api/{}", input.title.replace(" ", "_")),
         input.title,
         input.order.unwrap_or(0),
     );
@@ -158,10 +158,13 @@ async fn get_todo(ctx: &Context, url: &str) -> Result<Todo> {
 
     info!("Resp: {:?}", resp);
 
-    let todo = serde_json::from_slice(&resp.body);
-    info!("TODO: {:?}", todo);
+    let todo = serde_json::from_slice::<Todo>(&resp.body)?;
+    let todo = Todo {
+        title: todo.title.replace("_", " "),
+        ..todo
+    };
 
-    Ok(todo?)
+    Ok(todo)
 }
 
 //TODO: implement
