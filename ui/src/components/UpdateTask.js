@@ -40,7 +40,7 @@ function UpdateTask({ task, updateTask }) {
               <Input
                 ref={initialRef}
                 placeholder='Enter your task'
-                defaultValue={task.body}
+                defaultValue={task.title}
                 onChange={(e) => setBody(e.target.value)}
                 onFocus={(e) => setBody(e.target.value)}
               />
@@ -53,7 +53,7 @@ function UpdateTask({ task, updateTask }) {
             </Button>
             <Button
               colorScheme='blue'
-              onClick={() => updateTask(task.id, body, onClose)}
+              onClick={() => updateTask(task.url, body, onClose)}
             >
               Save
             </Button>

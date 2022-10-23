@@ -27,6 +27,7 @@ function AddTask({ addTask }) {
 
     const task = {
       title: taskText,
+      url: `/api/${taskText.replace(" ", "_")}`,
       // template things below
       id: nanoid(),
       body: taskText,

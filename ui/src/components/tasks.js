@@ -13,7 +13,7 @@ import { Image } from "@chakra-ui/react";
 import img from "../images/empty.svg";
 
 function TaskList({ tasks, updateTask, deleteTask, deleteTaskAll, checkTask }) {
-  if (!tasks.length) {
+  if (!tasks || tasks.length === 0) {
     return (
       <>
         <Box maxW='80%'>
@@ -46,7 +46,7 @@ function TaskList({ tasks, updateTask, deleteTask, deleteTaskAll, checkTask }) {
               w='100%'
               p='8px'
               borderRadius='lg'
-              as={task.check === true ? "s" : ""}
+              as={task.completed === true ? "s" : ""}
               cursor='pointer'
               onClick={() => checkTask(task.url)}
             >

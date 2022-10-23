@@ -56,7 +56,6 @@ impl Todo {
 async fn create_todo(ctx: &Context, input: InputTodo) -> Result<Todo> {
     info!("Creating a todo...");
 
-    //TODO: this won't work for any title that's not a single word or whatever
     let todo = Todo::new(
         format!("/api/{}", input.title.replace(" ", "_")),
         input.title,
@@ -102,7 +101,7 @@ async fn update_todo(ctx: &Context, url: &str, update: UpdateTodo) -> Result<Tod
 async fn get_all_todos(ctx: &Context) -> Result<Vec<Todo>> {
     info!("Getting all todos...");
 
-    let resp = send_kv(ctx, "wasmkv.get".into()).await?;
+    let resp = req(ctx, "wasmkv.get".into()).await?;
 
     // Deserialize into vec of strings, map to Todo object
     let todos = serde_json::from_slice::<Vec<Vec<u8>>>(&resp.body)?
@@ -122,9 +121,7 @@ async fn get_all_todos(ctx: &Context) -> Result<Vec<Todo>> {
 
 async fn get_todo(ctx: &Context, todo: &str) -> Result<Todo> {
     info!("Getting a todo... {}", todo);
-    let resp = send_kv(ctx, format!("wasmkv.get./api/{}", todo)).await?;
-    info!("Resp: {:?}", resp);
-
+    let resp = req(ctx, format!("wasmkv.get./api/{}", todo)).await?;
     let todo = serde_json::from_slice::<Todo>(&resp.body)?;
     let todo = Todo {
         title: todo.title.replace("_", " "),
@@ -134,16 +131,32 @@ async fn get_todo(ctx: &Context, todo: &str) -> Result<Todo> {
     Ok(todo)
 }
 
-async fn delete_all_todos(ctx: &Context) -> Result<()> {
+async fn delete_all_todos(ctx: &Context) -> RpcResult<()> {
     info!("Deleting all todos...");
-    let _ = send_kv(ctx, "wasmkv.del".into()).await?;
-    Ok(())
+    MessagingSender::new()
+        .publish(
+            ctx,
+            &PubMessage {
+                subject: "wasmkv.del".to_string(),
+                reply_to: None,
+                body: vec![],
+            },
+        )
+        .await
 }
 
-async fn delete_todo(ctx: &Context, url: &str) -> Result<()> {
+async fn delete_todo(ctx: &Context, todo: &str) -> RpcResult<()> {
     info!("Deleting a todo...");
-    let _ = send_kv(ctx, format!("wasmkv.del.{}", url)).await?;
-    Ok(())
+    MessagingSender::new()
+        .publish(
+            ctx,
+            &PubMessage {
+                subject: format!("wasmkv.del./api/{}", todo),
+                reply_to: None,
+                body: vec![],
+            },
+        )
+        .await
 }
 
 async fn handle_request(ctx: &Context, req: &HttpRequest) -> RpcResult<HttpResponse> {
@@ -189,7 +202,7 @@ async fn handle_request(ctx: &Context, req: &HttpRequest) -> RpcResult<HttpRespo
             Err(e) => Err(RpcError::ActorHandler(format!("deleting all todos: {}", e))),
         },
 
-        ("DELETE", [url]) => match delete_todo(ctx, url).await {
+        ("DELETE", ["api", todo]) => match delete_todo(ctx, todo).await {
             Ok(_) => Ok(HttpResponse::default()),
             Err(e) => Err(RpcError::ActorHandler(format!("deleting todo: {}", e))),
         },
@@ -227,7 +240,7 @@ async fn handle_request(ctx: &Context, req: &HttpRequest) -> RpcResult<HttpRespo
     }
 }
 
-async fn send_kv(ctx: &Context, subject: String) -> RpcResult<ReplyMessage> {
+async fn req(ctx: &Context, subject: String) -> RpcResult<ReplyMessage> {
     MessagingSender::new()
         .request(
             ctx,

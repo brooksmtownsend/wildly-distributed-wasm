@@ -39,20 +39,11 @@ impl MessageSubscriber for DistKvActor {
                 .await
             }
             // wasmkv.set.<key>
-            (Some(&"wasmkv"), Some(&"set"), Some(key), Some(reply_to)) => {
-                set(ctx, key, &msg.body).await?;
-                reply(ctx, reply_to, vec![]).await
-            }
+            (Some(&"wasmkv"), Some(&"set"), Some(key), _) => set(ctx, key, &msg.body).await,
             // wasmky.del   (delete all)
-            (Some(&"wasmkv"), Some(&"del"), None, Some(reply_to)) => {
-                delete_all(ctx).await?;
-                reply(ctx, reply_to, vec![]).await
-            }
+            (Some(&"wasmkv"), Some(&"del"), None, _) => delete_all(ctx).await,
             // wasmky.del.key
-            (Some(&"wasmkv"), Some(&"del"), Some(key), Some(reply_to)) => {
-                delete(ctx, key).await?;
-                reply(ctx, reply_to, vec![]).await
-            }
+            (Some(&"wasmkv"), Some(&"del"), Some(key), _) => delete(ctx, key).await,
             (first, second, _, _) => {
                 error!(
                     "Invalid distkv operation, ignoring: {:?}.{:?}",
@@ -70,10 +61,7 @@ async fn get(ctx: &Context, key: &str) -> RpcResult<String> {
         Ok(GetResponse {
             value,
             exists: true,
-        }) => {
-            info!("value: {:?}", value);
-            Ok(value)
-        }
+        }) => Ok(value),
         Ok(GetResponse { exists: false, .. }) => Ok("".to_string()),
         _ => Err(RpcError::ActorHandler("".to_string())),
     }
@@ -87,7 +75,6 @@ async fn get_all(ctx: &Context) -> RpcResult<Vec<Vec<u8>>> {
     for url in urls {
         result.push(get(ctx, &url).await?.as_bytes().to_vec())
     }
-    info!("Result: {:?}", result);
 
     Ok(result)
 }

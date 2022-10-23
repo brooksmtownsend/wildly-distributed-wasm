@@ -58,7 +58,7 @@ function DeleteTask({ task, deleteTask }) {
         <ModalContent w='90%'>
           <ModalHeader>Do you really want to delete the task?</ModalHeader>
           <ModalBody>
-            <Text>{task.body}</Text>
+            <Text>{task.title}</Text>
           </ModalBody>
           <ModalFooter>
             <Button mr={3} onClick={onClose}>
@@ -66,7 +66,7 @@ function DeleteTask({ task, deleteTask }) {
             </Button>
             <Button
               colorScheme='red'
-              onClick={() => deleteTask(task.id, onClose)}
+              onClick={() => deleteTask(task.url, onClose)}
             >
               Yes
             </Button>

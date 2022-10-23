@@ -17,7 +17,7 @@ function App() {
   const toast = useToast();
 
   const [tasks, setTasks] = useState(
-    () => []
+    () => undefined
   );
 
   const requestOptions = {
@@ -25,15 +25,22 @@ function App() {
     headers: { 'Content-Type': 'application/json' }
   };
 
-  if (tasks.length === 0) {
+  if (!tasks) {
     fetch(`${WORMHOLE_URL}api`, requestOptions)
       .then(data => data.json())
       .then(tasks => setTasks(tasks));
   }
 
-  function deleteTask(id) {
+  function deleteTask(url) {
+    const requestOptions = {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' }
+    };
+    fetch(`${url}`, requestOptions)
+      .then(data => console.log(data));
+
     const newTasks = tasks.filter((task) => {
-      return task.id !== id;
+      return task.url !== url;
     });
     setTasks(newTasks);
   }
@@ -48,18 +55,26 @@ function App() {
     setTasks([]);
   }
 
-  function checkTask(id) {
+  function checkTask(url) {
     const newTasksCheck = tasks.map((task, index, array) => {
-      if (task.id === id) {
+      if (task.url === url) {
         task.check = !task.check;
+        task.completed = !task.completed;
+        const requestOptions = {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(task)
+        };
+        fetch(`${url}`, requestOptions)
+          .then(data => console.log(data));
       }
       return task;
     });
     setTasks(newTasksCheck);
   }
 
-  function updateTask(id, body, onClose) {
-    const info = body.trim();
+  function updateTask(url, title, onClose) {
+    const info = title.trim();
 
     if (!info) {
       toast({
@@ -74,9 +89,16 @@ function App() {
     }
 
     const newTasksUpdate = tasks.map((task, index, array) => {
-      if (task.id === id) {
-        task.body = body;
+      if (task.url === url) {
+        task.title = info;
         task.check = false;
+        const requestOptions = {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(task)
+        };
+        fetch(`${url}`, requestOptions)
+          .then(data => console.log(data));
       }
       return task;
     });
