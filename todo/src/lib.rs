@@ -4,9 +4,6 @@ use wasmbus_rpc::actor::prelude::*;
 use wasmcloud_interface_httpserver::{
     HeaderMap, HttpRequest, HttpResponse, HttpServer, HttpServerReceiver,
 };
-use wasmcloud_interface_keyvalue::{
-    IncrementRequest, KeyValue, KeyValueSender, SetAddRequest, SetDelRequest, SetRequest,
-};
 use wasmcloud_interface_logging::{debug, info, warn};
 use wasmcloud_interface_messaging::{Messaging, MessagingSender, PubMessage, RequestMessage};
 use wild_wasm_interface::*;
@@ -77,24 +74,25 @@ async fn create_todo(ctx: &Context, input: InputTodo) -> Result<Todo> {
     Ok(todo)
 }
 
-//TODO: implement
 async fn update_todo(ctx: &Context, url: &str, update: UpdateTodo) -> Result<Todo> {
     info!("Updating a todo...");
 
     let todo = get_todo(ctx, url).await?;
     let todo = todo.update(update);
 
-    KeyValueSender::new()
-        .set(
+    // this assumes update method can't change the url. Otherwise, we'd need to delete and add.
+    MessagingSender::new()
+        .publish(
             ctx,
-            &SetRequest {
-                key: todo.url.clone(),
-                value: serde_json::to_string(&todo)?,
-                expires: 0,
+            &PubMessage {
+                subject: format!("wasmkv.set.{}", url),
+                reply_to: None,
+                body: serde_json::to_vec(&todo)?,
             },
         )
         .await
         .map_err(|e| anyhow!(e))?;
+
     Ok(todo)
 }
 
@@ -152,42 +150,33 @@ async fn get_todo(ctx: &Context, todo: &str) -> Result<Todo> {
     Ok(todo)
 }
 
-//TODO: implement
 async fn delete_all_todos(ctx: &Context) -> Result<()> {
     info!("Deleting all todos...");
-
-    let urls = KeyValueSender::new()
-        .set_query(ctx, "all_urls")
-        .await
-        .map_err(|e| anyhow!(e))?;
-
-    for url in urls {
-        delete_todo(ctx, &url).await?
-    }
-
+    let _ = MessagingSender::new()
+        .request(
+            ctx,
+            &RequestMessage {
+                subject: format!("wasmkv.del"),
+                body: vec![],
+                timeout_ms: 1000,
+            },
+        )
+        .await?;
     Ok(())
 }
 
-//TODO: implement
 async fn delete_todo(ctx: &Context, url: &str) -> Result<()> {
     info!("Deleting a todo...");
-
-    KeyValueSender::new()
-        .set_del(
+    let _ = MessagingSender::new()
+        .request(
             ctx,
-            &SetDelRequest {
-                set_name: "all_urls".to_string(),
-                value: url.to_string(),
+            &RequestMessage {
+                subject: format!("wasmkv.del.{}", url),
+                body: vec![],
+                timeout_ms: 1000,
             },
         )
-        .await
-        .map_err(|e| anyhow!(e))?;
-
-    KeyValueSender::new()
-        .del(ctx, url)
-        .await
-        .map_err(|e| anyhow!(e))?;
-
+        .await?;
     Ok(())
 }
 

@@ -1,6 +1,6 @@
 use wasmbus_rpc::actor::prelude::*;
 use wasmcloud_interface_keyvalue::{
-    GetResponse, KeyValue, KeyValueSender, SetAddRequest, SetRequest,
+    GetResponse, KeyValue, KeyValueSender, SetAddRequest, SetDelRequest, SetRequest,
 };
 use wasmcloud_interface_logging::{error, info};
 use wasmcloud_interface_messaging::{
@@ -18,9 +18,9 @@ impl MessageSubscriber for DistKvActor {
         info!("Received message: {:?}", msg);
         // Split subject into parts for matching
         let subj = msg.subject.split('.').collect::<Vec<&str>>();
-        match (subj.first(), subj.get(1)) {
+        match (subj.first(), subj.get(1), subj.get(2)) {
             // wasmkv.get
-            (Some(&"wasmkv"), Some(&"get")) if msg.reply_to.is_some() => {
+            (Some(&"wasmkv"), Some(&"get"), None) if msg.reply_to.is_some() => {
                 MessagingSender::new()
                     .publish(
                         ctx,
@@ -35,7 +35,7 @@ impl MessageSubscriber for DistKvActor {
                     .await?;
             }
             // wasmkv.get.<key>
-            (Some(&"wasmkv"), Some(&"get")) if msg.reply_to.is_some() && subj.get(2).is_some() => {
+            (Some(&"wasmkv"), Some(&"get"), Some(key)) if msg.reply_to.is_some() => {
                 // Publish reply with the retrieved payload
                 MessagingSender::new()
                     .publish(
@@ -43,18 +43,24 @@ impl MessageSubscriber for DistKvActor {
                         &PubMessage {
                             subject: msg.reply_to.clone().unwrap(),
                             reply_to: None,
-                            body: get(ctx, subj.get(2).unwrap())
-                                .await
-                                .map(|todo| todo.as_bytes().to_vec())?,
+                            body: get(ctx, key).await.map(|todo| todo.as_bytes().to_vec())?,
                         },
                     )
                     .await?;
             }
             // wasmkv.set.<key>
-            (Some(&"wasmkv"), Some(&"set")) if subj.get(2).is_some() => {
-                set(ctx, subj.get(2).unwrap(), &msg.body).await?;
+            (Some(&"wasmkv"), Some(&"set"), Some(key)) => {
+                set(ctx, key, &msg.body).await?;
             }
-            (first, second) => error!(
+            // wasmky.delete   (delete all)
+            (Some(&"wasmkv"), Some(&"delete"), None) => {
+                delete_all(ctx).await?;
+            }
+            // wasmky.delete.key
+            (Some(&"wasmkv"), Some(&"delete"), Some(key)) => {
+                delete(ctx, key).await?;
+            }
+            (first, second, _) => error!(
                 "Invalid distkv operation, ignoring: {:?}.{:?}",
                 first, second
             ),
@@ -89,6 +95,31 @@ async fn get_all(ctx: &Context) -> RpcResult<Vec<Vec<u8>>> {
     info!("Result: {:?}", result);
 
     Ok(result)
+}
+
+async fn delete_all(ctx: &Context) -> RpcResult<()> {
+    let kv = KeyValueSender::new();
+    let urls = kv.set_query(ctx, "all_urls").await?;
+    for key in urls {
+        kv.del(ctx, &key).await?;
+    }
+    kv.set_clear(ctx, "all_urls").await?;
+    Ok(())
+}
+
+async fn delete(ctx: &Context, key: &str) -> RpcResult<()> {
+    let kv = KeyValueSender::new();
+    kv.del(ctx, key).await?;
+    let _ = kv
+        .set_del(
+            ctx,
+            &SetDelRequest {
+                set_name: "all_urls".to_string(),
+                value: key.to_string(),
+            },
+        )
+        .await?;
+    Ok(())
 }
 
 /// Sets a value at `key`
