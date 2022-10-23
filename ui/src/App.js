@@ -39,6 +39,12 @@ function App() {
   }
 
   function deleteTaskAll() {
+    const requestOptions = {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' }
+    };
+    fetch(`${WORMHOLE_URL}api`, requestOptions)
+      .then(data => console.log(data));
     setTasks([]);
   }
 
@@ -81,7 +87,6 @@ function App() {
   }
 
   function addTask(task) {
-    // Simple POST request with a JSON body using fetch
     const requestOptions = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -93,7 +98,6 @@ function App() {
   }
 
   const { colorMode, toggleColorMode } = useColorMode();
-  console.log(tasks);
 
   return (
     <VStack p={4} minH='100vh' pb={28}>

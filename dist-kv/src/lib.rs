@@ -18,54 +18,49 @@ impl MessageSubscriber for DistKvActor {
         info!("Received message: {:?}", msg);
         // Split subject into parts for matching
         let subj = msg.subject.split('.').collect::<Vec<&str>>();
-        match (subj.first(), subj.get(1), subj.get(2)) {
+        match (subj.first(), subj.get(1), subj.get(2), msg.reply_to.clone()) {
             // wasmkv.get
-            (Some(&"wasmkv"), Some(&"get"), None) if msg.reply_to.is_some() => {
-                MessagingSender::new()
-                    .publish(
-                        ctx,
-                        &PubMessage {
-                            subject: msg.reply_to.clone().unwrap(),
-                            reply_to: None,
-                            body: serde_json::to_vec(&get_all(ctx).await?).map_err(|_| {
-                                RpcError::Ser("Failed to serialize all todos".to_string())
-                            })?,
-                        },
-                    )
-                    .await?;
+            (Some(&"wasmkv"), Some(&"get"), None, Some(reply_to)) => {
+                reply(
+                    ctx,
+                    reply_to,
+                    serde_json::to_vec(&get_all(ctx).await?)
+                        .map_err(|_| RpcError::Ser("Failed to serialize all todos".to_string()))?,
+                )
+                .await
             }
             // wasmkv.get.<key>
-            (Some(&"wasmkv"), Some(&"get"), Some(key)) if msg.reply_to.is_some() => {
-                // Publish reply with the retrieved payload
-                MessagingSender::new()
-                    .publish(
-                        ctx,
-                        &PubMessage {
-                            subject: msg.reply_to.clone().unwrap(),
-                            reply_to: None,
-                            body: get(ctx, key).await.map(|todo| todo.as_bytes().to_vec())?,
-                        },
-                    )
-                    .await?;
+            (Some(&"wasmkv"), Some(&"get"), Some(key), Some(reply_to)) => {
+                reply(
+                    ctx,
+                    reply_to,
+                    get(ctx, key).await.map(|todo| todo.as_bytes().to_vec())?,
+                )
+                .await
             }
             // wasmkv.set.<key>
-            (Some(&"wasmkv"), Some(&"set"), Some(key)) => {
+            (Some(&"wasmkv"), Some(&"set"), Some(key), Some(reply_to)) => {
                 set(ctx, key, &msg.body).await?;
+                reply(ctx, reply_to, vec![]).await
             }
             // wasmky.del   (delete all)
-            (Some(&"wasmkv"), Some(&"del"), None) => {
+            (Some(&"wasmkv"), Some(&"del"), None, Some(reply_to)) => {
                 delete_all(ctx).await?;
+                reply(ctx, reply_to, vec![]).await
             }
             // wasmky.del.key
-            (Some(&"wasmkv"), Some(&"del"), Some(key)) => {
+            (Some(&"wasmkv"), Some(&"del"), Some(key), Some(reply_to)) => {
                 delete(ctx, key).await?;
+                reply(ctx, reply_to, vec![]).await
             }
-            (first, second, _) => error!(
-                "Invalid distkv operation, ignoring: {:?}.{:?}",
-                first, second
-            ),
-        };
-        Ok(())
+            (first, second, _, _) => {
+                error!(
+                    "Invalid distkv operation, ignoring: {:?}.{:?}",
+                    first, second
+                );
+                Ok(())
+            }
+        }
     }
 }
 
@@ -147,4 +142,17 @@ async fn set(ctx: &Context, key: &str, value: &[u8]) -> RpcResult<()> {
         .await?;
 
     Ok(())
+}
+
+async fn reply(ctx: &Context, subject: String, body: Vec<u8>) -> RpcResult<()> {
+    MessagingSender::new()
+        .publish(
+            ctx,
+            &PubMessage {
+                subject,
+                reply_to: None,
+                body,
+            },
+        )
+        .await
 }
