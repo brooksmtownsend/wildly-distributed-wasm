@@ -1,6 +1,6 @@
 # Wildly Distributed Wasm Demo
 
-An absurd demo
+An absurd demo showing off the benefits of distributed WebAssembly and wasmCloud.
 
 ## Features
 
@@ -11,12 +11,10 @@ An absurd demo
 
 ## TODO
 
-- [ ] Implement the remaining operations on the TODO app (get all, delete, delete all, update)
-- [ ] Build frontend into an actor, deploy actor
+- [ ] Implement the remaining operations on the TODO app (update)
 - [ ] Write up README with appropriate scripts
-- [ ] Launch DBs in various hosts
 
 ## What does this not have?
 
 - [ ] Error handling on distributed sets
-- [ ] Support for non-idempotent operations (updates, increments, etc)
+- [ ] Data recovery and syncing
