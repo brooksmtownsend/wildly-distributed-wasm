@@ -21,6 +21,7 @@ wasmcloud-interface-httpserver = "0.7.0"
 wasmcloud-interface-keyvalue = "0.8.0"
 wasmcloud-interface-messaging = "0.7.0"
 wasmcloud-interface-logging = "0.7.0"
+wild-wasm-interface = { path = "../wild-wasm-interface/rust" }
 
 [profile.release]
 # Optimize for small code size

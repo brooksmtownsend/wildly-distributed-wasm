@@ -1,3 +1,6 @@
-
+.DS_Store
 host_config.json
 dump.rdb
+
+target
+build

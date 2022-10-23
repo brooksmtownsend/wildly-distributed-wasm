@@ -1,12 +1,17 @@
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
 use wasmbus_rpc::actor::prelude::*;
-use wasmcloud_interface_httpserver::{HttpRequest, HttpResponse, HttpServer, HttpServerReceiver};
+use wasmcloud_interface_httpserver::{
+    HeaderMap, HttpRequest, HttpResponse, HttpServer, HttpServerReceiver,
+};
 use wasmcloud_interface_keyvalue::{
     IncrementRequest, KeyValue, KeyValueSender, SetAddRequest, SetDelRequest, SetRequest,
 };
 use wasmcloud_interface_logging::{debug, info, warn};
 use wasmcloud_interface_messaging::{Messaging, MessagingSender, PubMessage, RequestMessage};
+use wild_wasm_interface::*;
+
+const UI_ACTOR: &str = "MD7C625SXR64K4SBW7YOSOXVKREECAMS4LRQO4MUNSIHLFGIAZCAPWUO";
 
 #[derive(Serialize, Deserialize)]
 struct InputTodo {
@@ -143,13 +148,13 @@ async fn get_all_todos(ctx: &Context) -> Result<Vec<Todo>> {
     Ok(result)
 }
 
-async fn get_todo(ctx: &Context, url: &str) -> Result<Todo> {
-    info!("Getting a todo... {}", url);
+async fn get_todo(ctx: &Context, todo: &str) -> Result<Todo> {
+    info!("Getting a todo... {}", todo);
     let resp = MessagingSender::new()
         .request(
             ctx,
             &RequestMessage {
-                subject: format!("wasmkv.get.{}", url),
+                subject: format!("wasmkv.get./api/{}", todo),
                 body: vec![],
                 timeout_ms: 1000,
             },
@@ -209,14 +214,10 @@ async fn delete_todo(ctx: &Context, url: &str) -> Result<()> {
 async fn handle_request(ctx: &Context, req: &HttpRequest) -> RpcResult<HttpResponse> {
     debug!("incoming req: {:?}", req);
 
-    let trimmed_path = req.path.trim_end_matches('/');
-    match (req.method.as_ref(), trimmed_path) {
-        ("GET", "") => Ok(HttpResponse {
-            body: "todo server lives at /api".to_string().into_bytes(),
-            ..Default::default()
-        }),
-
-        ("POST", "/api") => match serde_json::from_slice(&req.body) {
+    let trimmed_path: Vec<&str> = req.path.trim_end_matches('/').split('/').collect();
+    debug!("Segments: {:?}", trimmed_path);
+    match (req.method.as_ref(), trimmed_path.as_slice()) {
+        ("POST", ["/api"]) => match serde_json::from_slice(&req.body) {
             Ok(input) => match create_todo(ctx, input).await {
                 Ok(todo) => HttpResponse::json(todo, 200),
                 Err(e) => Err(RpcError::ActorHandler(format!("creating todo: {:?}", e))),
@@ -227,17 +228,17 @@ async fn handle_request(ctx: &Context, req: &HttpRequest) -> RpcResult<HttpRespo
             ))),
         },
 
-        ("GET", "/api") => match get_all_todos(ctx).await {
+        ("GET", ["/api"]) => match get_all_todos(ctx).await {
             Ok(todos) => HttpResponse::json(todos, 200),
             Err(e) => Err(RpcError::ActorHandler(format!("getting all todos: {}", e))),
         },
 
-        ("GET", url) => match get_todo(ctx, url).await {
+        ("GET", ["/api", todo]) => match get_todo(ctx, todo).await {
             Ok(todo) => HttpResponse::json(todo, 200),
             Err(_) => Ok(HttpResponse::not_found()),
         },
 
-        ("PATCH", url) => match serde_json::from_slice(&req.body) {
+        ("PATCH", [url]) => match serde_json::from_slice(&req.body) {
             Ok(update) => match update_todo(ctx, url, update).await {
                 Ok(todo) => HttpResponse::json(todo, 200),
                 Err(e) => Err(RpcError::ActorHandler(format!("updating todo: {}", e))),
@@ -248,16 +249,42 @@ async fn handle_request(ctx: &Context, req: &HttpRequest) -> RpcResult<HttpRespo
             ))),
         },
 
-        ("DELETE", "/api") => match delete_all_todos(ctx).await {
+        ("DELETE", ["/api"]) => match delete_all_todos(ctx).await {
             Ok(_) => Ok(HttpResponse::default()),
             Err(e) => Err(RpcError::ActorHandler(format!("deleting all todos: {}", e))),
         },
 
-        ("DELETE", url) => match delete_todo(ctx, url).await {
+        ("DELETE", [url]) => match delete_todo(ctx, url).await {
             Ok(_) => Ok(HttpResponse::default()),
             Err(e) => Err(RpcError::ActorHandler(format!("deleting todo: {}", e))),
         },
 
+        ("GET", _) => {
+            debug!(
+                "Got unrecognized path {}. Assuming this is an asset request",
+                req.path
+            );
+            let sender = UiSender::to_actor(UI_ACTOR);
+            let resp = sender.get_asset(ctx, &req.path).await?;
+            if !resp.found {
+                debug!("Asset {} was not found", req.path);
+                return Ok(HttpResponse::not_found());
+            }
+            debug!("Got {} bytes for {}", resp.asset.len(), req.path);
+            let mut header = HeaderMap::new();
+            if let Some(content_type) = resp.content_type {
+                debug!(
+                    "Found content type of {}, setting Content-Type header",
+                    content_type
+                );
+                header.insert("Content-Type".to_string(), vec![content_type]);
+            }
+            Ok(HttpResponse {
+                status_code: 200,
+                header,
+                body: resp.asset,
+            })
+        }
         (_, _) => {
             warn!("no route for this request: {:?}", req);
             Ok(HttpResponse::not_found())
