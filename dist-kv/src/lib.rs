@@ -52,12 +52,12 @@ impl MessageSubscriber for DistKvActor {
             (Some(&"wasmkv"), Some(&"set"), Some(key)) => {
                 set(ctx, key, &msg.body).await?;
             }
-            // wasmky.delete   (delete all)
-            (Some(&"wasmkv"), Some(&"delete"), None) => {
+            // wasmky.del   (delete all)
+            (Some(&"wasmkv"), Some(&"del"), None) => {
                 delete_all(ctx).await?;
             }
-            // wasmky.delete.key
-            (Some(&"wasmkv"), Some(&"delete"), Some(key)) => {
+            // wasmky.del.key
+            (Some(&"wasmkv"), Some(&"del"), Some(key)) => {
                 delete(ctx, key).await?;
             }
             (first, second, _) => error!(
