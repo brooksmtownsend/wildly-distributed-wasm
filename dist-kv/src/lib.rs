@@ -1,5 +1,7 @@
 use wasmbus_rpc::actor::prelude::*;
-use wasmcloud_interface_keyvalue::{GetResponse, KeyValue, KeyValueSender, SetRequest};
+use wasmcloud_interface_keyvalue::{
+    GetResponse, KeyValue, KeyValueSender, SetAddRequest, SetRequest,
+};
 use wasmcloud_interface_logging::{error, info};
 use wasmcloud_interface_messaging::{
     MessageSubscriber, MessageSubscriberReceiver, Messaging, MessagingSender, PubMessage,
@@ -17,6 +19,21 @@ impl MessageSubscriber for DistKvActor {
         // Split subject into parts for matching
         let subj = msg.subject.split('.').collect::<Vec<&str>>();
         match (subj.first(), subj.get(1)) {
+            // wasmkv.get
+            (Some(&"wasmkv"), Some(&"get")) if msg.reply_to.is_some() => {
+                MessagingSender::new()
+                    .publish(
+                        ctx,
+                        &PubMessage {
+                            subject: msg.reply_to.clone().unwrap(),
+                            reply_to: None,
+                            body: serde_json::to_vec(&get_all(ctx).await?).map_err(|_| {
+                                RpcError::Ser("Failed to serialize all todos".to_string())
+                            })?,
+                        },
+                    )
+                    .await?;
+            }
             // wasmkv.get.<key>
             (Some(&"wasmkv"), Some(&"get")) if msg.reply_to.is_some() && subj.get(2).is_some() => {
                 // Publish reply with the retrieved payload
@@ -26,7 +43,9 @@ impl MessageSubscriber for DistKvActor {
                         &PubMessage {
                             subject: msg.reply_to.clone().unwrap(),
                             reply_to: None,
-                            body: get(ctx, subj.get(2).unwrap()).await?,
+                            body: get(ctx, subj.get(2).unwrap())
+                                .await
+                                .map(|todo| todo.as_bytes().to_vec())?,
                         },
                     )
                     .await?;
@@ -45,15 +64,31 @@ impl MessageSubscriber for DistKvActor {
 }
 
 /// Gets a value at `key`, returning an empty vector if nothing is found
-async fn get(ctx: &Context, key: &str) -> RpcResult<Vec<u8>> {
+async fn get(ctx: &Context, key: &str) -> RpcResult<String> {
     match KeyValueSender::new().get(ctx, key).await {
         Ok(GetResponse {
             value,
             exists: true,
-        }) => Ok(value.as_bytes().to_vec()),
-        Ok(GetResponse { exists: false, .. }) => Ok(vec![]),
+        }) => {
+            info!("value: {:?}", value);
+            Ok(value)
+        }
+        Ok(GetResponse { exists: false, .. }) => Ok("".to_string()),
         _ => Err(RpcError::ActorHandler("".to_string())),
     }
+}
+
+/// Gets all TODOs
+async fn get_all(ctx: &Context) -> RpcResult<Vec<Vec<u8>>> {
+    let urls = KeyValueSender::new().set_query(ctx, "all_urls").await?;
+
+    let mut result = Vec::new();
+    for url in urls {
+        result.push(get(ctx, &url).await?.as_bytes().to_vec())
+    }
+    info!("Result: {:?}", result);
+
+    Ok(result)
 }
 
 /// Sets a value at `key`
@@ -68,5 +103,17 @@ async fn set(ctx: &Context, key: &str, value: &[u8]) -> RpcResult<()> {
                 expires: 0,
             },
         )
-        .await
+        .await?;
+
+    KeyValueSender::new()
+        .set_add(
+            ctx,
+            &SetAddRequest {
+                set_name: "all_urls".to_string(),
+                value: key.to_string(),
+            },
+        )
+        .await?;
+
+    Ok(())
 }

@@ -52,19 +52,8 @@ impl Todo {
     }
 }
 
-//TODO: implement
 async fn create_todo(ctx: &Context, input: InputTodo) -> Result<Todo> {
     info!("Creating a todo...");
-    // let id = KeyValueSender::new()
-    //     .increment(
-    //         ctx,
-    //         &IncrementRequest {
-    //             key: "next_id".to_string(),
-    //             value: 1,
-    //         },
-    //     )
-    //     .await
-    //     .map_err(|e| anyhow!(e))?;
 
     //TODO: this won't work for any title that's not a single word or whatever
     let todo = Todo::new(
@@ -72,29 +61,6 @@ async fn create_todo(ctx: &Context, input: InputTodo) -> Result<Todo> {
         input.title,
         input.order.unwrap_or(0),
     );
-
-    // KeyValueSender::new()
-    //     .set(
-    //         ctx,
-    //         &SetRequest {
-    //             key: todo.url.clone(),
-    //             value: serde_json::to_string(&todo)?,
-    //             expires: 0,
-    //         },
-    //     )
-    //     .await
-    //     .map_err(|e| anyhow!(e))?;
-
-    // KeyValueSender::new()
-    //     .set_add(
-    //         ctx,
-    //         &SetAddRequest {
-    //             set_name: "all_urls".to_string(),
-    //             value: todo.url.clone(),
-    //         },
-    //     )
-    //     .await
-    //     .map_err(|e| anyhow!(e))?;
 
     MessagingSender::new()
         .publish(
@@ -132,20 +98,34 @@ async fn update_todo(ctx: &Context, url: &str, update: UpdateTodo) -> Result<Tod
     Ok(todo)
 }
 
-//TODO: implement
 async fn get_all_todos(ctx: &Context) -> Result<Vec<Todo>> {
     info!("Getting all todos...");
 
-    let urls = KeyValueSender::new()
-        .set_query(ctx, "all_urls")
-        .await
-        .map_err(|e| anyhow!(e))?;
+    let resp = MessagingSender::new()
+        .request(
+            ctx,
+            &RequestMessage {
+                subject: format!("wasmkv.get"),
+                body: vec![],
+                timeout_ms: 1000,
+            },
+        )
+        .await?;
 
-    let mut result = Vec::new();
-    for url in urls {
-        result.push(get_todo(ctx, &url).await?)
-    }
-    Ok(result)
+    // Deserialize into vec of strings, map to Todo object
+    let todos = serde_json::from_slice::<Vec<Vec<u8>>>(&resp.body)?
+        .iter()
+        .filter_map(|todo_slice| {
+            serde_json::from_slice::<Todo>(todo_slice)
+                .map(|todo| Todo {
+                    title: todo.title.replace("_", ""),
+                    ..todo
+                })
+                .ok()
+        })
+        .collect();
+
+    Ok(todos)
 }
 
 async fn get_todo(ctx: &Context, todo: &str) -> Result<Todo> {
@@ -214,10 +194,16 @@ async fn delete_todo(ctx: &Context, url: &str) -> Result<()> {
 async fn handle_request(ctx: &Context, req: &HttpRequest) -> RpcResult<HttpResponse> {
     debug!("incoming req: {:?}", req);
 
-    let trimmed_path: Vec<&str> = req.path.trim_end_matches('/').split('/').collect();
-    debug!("Segments: {:?}", trimmed_path);
+    //TODO: better way to trim both ends
+    let trimmed_path: Vec<&str> = req
+        .path
+        .trim_start_matches('/')
+        .trim_end_matches('/')
+        .split('/')
+        .collect();
+    info!("Segments: {:?}", trimmed_path);
     match (req.method.as_ref(), trimmed_path.as_slice()) {
-        ("POST", ["/api"]) => match serde_json::from_slice(&req.body) {
+        ("POST", ["api"]) => match serde_json::from_slice(&req.body) {
             Ok(input) => match create_todo(ctx, input).await {
                 Ok(todo) => HttpResponse::json(todo, 200),
                 Err(e) => Err(RpcError::ActorHandler(format!("creating todo: {:?}", e))),
@@ -228,12 +214,12 @@ async fn handle_request(ctx: &Context, req: &HttpRequest) -> RpcResult<HttpRespo
             ))),
         },
 
-        ("GET", ["/api"]) => match get_all_todos(ctx).await {
+        ("GET", ["api"]) => match get_all_todos(ctx).await {
             Ok(todos) => HttpResponse::json(todos, 200),
             Err(e) => Err(RpcError::ActorHandler(format!("getting all todos: {}", e))),
         },
 
-        ("GET", ["/api", todo]) => match get_todo(ctx, todo).await {
+        ("GET", ["api", todo]) => match get_todo(ctx, todo).await {
             Ok(todo) => HttpResponse::json(todo, 200),
             Err(_) => Ok(HttpResponse::not_found()),
         },
@@ -249,7 +235,7 @@ async fn handle_request(ctx: &Context, req: &HttpRequest) -> RpcResult<HttpRespo
             ))),
         },
 
-        ("DELETE", ["/api"]) => match delete_all_todos(ctx).await {
+        ("DELETE", ["api"]) => match delete_all_todos(ctx).await {
             Ok(_) => Ok(HttpResponse::default()),
             Err(e) => Err(RpcError::ActorHandler(format!("deleting all todos: {}", e))),
         },
@@ -260,7 +246,7 @@ async fn handle_request(ctx: &Context, req: &HttpRequest) -> RpcResult<HttpRespo
         },
 
         ("GET", _) => {
-            debug!(
+            info!(
                 "Got unrecognized path {}. Assuming this is an asset request",
                 req.path
             );

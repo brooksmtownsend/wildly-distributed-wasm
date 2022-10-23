@@ -10,17 +10,26 @@ import AddTask from "./components/AddTask";
 import { FaSun, FaMoon } from "react-icons/fa";
 import { useState, useEffect } from "react";
 
-const WORMHOLE_URL = "https://mauve-sun-9136.cosmonic.app";
+// const WORMHOLE_URL = "https://mauve-sun-9136.cosmonic.app/";
+const WORMHOLE_URL = "/";
 
 function App() {
   const toast = useToast();
+
   const [tasks, setTasks] = useState(
-    () => JSON.parse(localStorage.getItem("tasks")) || []
+    () => []
   );
 
-  useEffect(() => {
-    localStorage.setItem("tasks", JSON.stringify(tasks));
-  }, [tasks]);
+  const requestOptions = {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' }
+  };
+
+  if (tasks.length === 0) {
+    fetch(`${WORMHOLE_URL}api`, requestOptions)
+      .then(data => data.json())
+      .then(tasks => setTasks(tasks));
+  }
 
   function deleteTask(id) {
     const newTasks = tasks.filter((task) => {
@@ -76,15 +85,15 @@ function App() {
     const requestOptions = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      mode: 'no-cors',
       body: JSON.stringify(task)
     };
-    fetch(`${WORMHOLE_URL}/api`, requestOptions)
+    fetch(`${WORMHOLE_URL}api`, requestOptions)
       .then(data => console.log(data));
     setTasks([...tasks, task]);
   }
 
   const { colorMode, toggleColorMode } = useColorMode();
+  console.log(tasks);
 
   return (
     <VStack p={4} minH='100vh' pb={28}>

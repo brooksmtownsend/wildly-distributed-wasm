@@ -527,6 +527,7 @@ name = "dist-kv"
 version = "0.1.0"
 dependencies = [
  "futures 0.3.21",
+ "serde",
  "serde_json",
  "wasmbus-rpc",
  "wasmcloud-interface-keyvalue",

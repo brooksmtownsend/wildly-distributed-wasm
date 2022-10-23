@@ -41,16 +41,16 @@ function TaskList({ tasks, updateTask, deleteTask, deleteTaskAll, checkTask }) {
         alignItems='stretch'
       >
         {tasks.map((task) => (
-          <HStack key={task.id} opacity={task.check === true ? "0.2" : "1"}>
+          <HStack key={task.url} opacity={task.completed === true ? "0.2" : "1"}>
             <Text
               w='100%'
               p='8px'
               borderRadius='lg'
               as={task.check === true ? "s" : ""}
               cursor='pointer'
-              onClick={() => checkTask(task.id)}
+              onClick={() => checkTask(task.url)}
             >
-              {task.body}
+              {task.title}
             </Text>
             <DeleteTask
               task={task}
