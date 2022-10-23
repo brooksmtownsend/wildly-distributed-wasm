@@ -2296,7 +2296,7 @@ checksum = "9e79c4d996edb816c91e4308506774452e55e95c3c9de07b6729e17e15a5ef81"
 
 [[package]]
 name = "ui"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "async-trait",
  "futures 0.3.24",

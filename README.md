@@ -12,7 +12,7 @@ An absurd demo showing off the benefits of distributed WebAssembly and wasmCloud
 ## TODO
 
 - [ ] Implement the remaining operations on the TODO app (update)
-- [ ] Write up README with appropriate scripts
+- [ ] Write up README with appropriate scripts, including starting on diff hosts
 
 ## What does this not have?
 
