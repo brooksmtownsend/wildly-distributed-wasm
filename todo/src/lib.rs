@@ -5,9 +5,13 @@ use wasmcloud_interface_httpserver::{
     HeaderMap, HttpRequest, HttpResponse, HttpServer, HttpServerReceiver,
 };
 use wasmcloud_interface_logging::{debug, info, warn};
-use wasmcloud_interface_messaging::{Messaging, MessagingSender, PubMessage, RequestMessage};
+use wasmcloud_interface_messaging::{
+    Messaging, MessagingSender, PubMessage, ReplyMessage, RequestMessage,
+};
 use wild_wasm_interface::*;
 
+/// default timeout in milliseconds for sending to dist-kv. If a reply takes longer, it will generate an error
+const KV_REPLY_TIMEOUT_MS: u32 = 1000;
 const UI_ACTOR: &str = "MD7C625SXR64K4SBW7YOSOXVKREECAMS4LRQO4MUNSIHLFGIAZCAPWUO";
 
 #[derive(Serialize, Deserialize)]
@@ -80,7 +84,6 @@ async fn update_todo(ctx: &Context, url: &str, update: UpdateTodo) -> Result<Tod
     let todo = get_todo(ctx, url).await?;
     let todo = todo.update(update);
 
-    // this assumes update method can't change the url. Otherwise, we'd need to delete and add.
     MessagingSender::new()
         .publish(
             ctx,
@@ -99,16 +102,7 @@ async fn update_todo(ctx: &Context, url: &str, update: UpdateTodo) -> Result<Tod
 async fn get_all_todos(ctx: &Context) -> Result<Vec<Todo>> {
     info!("Getting all todos...");
 
-    let resp = MessagingSender::new()
-        .request(
-            ctx,
-            &RequestMessage {
-                subject: format!("wasmkv.get"),
-                body: vec![],
-                timeout_ms: 1000,
-            },
-        )
-        .await?;
+    let resp = send_kv(ctx, "wasmkv.get".into()).await?;
 
     // Deserialize into vec of strings, map to Todo object
     let todos = serde_json::from_slice::<Vec<Vec<u8>>>(&resp.body)?
@@ -128,17 +122,7 @@ async fn get_all_todos(ctx: &Context) -> Result<Vec<Todo>> {
 
 async fn get_todo(ctx: &Context, todo: &str) -> Result<Todo> {
     info!("Getting a todo... {}", todo);
-    let resp = MessagingSender::new()
-        .request(
-            ctx,
-            &RequestMessage {
-                subject: format!("wasmkv.get./api/{}", todo),
-                body: vec![],
-                timeout_ms: 1000,
-            },
-        )
-        .await?;
-
+    let resp = send_kv(ctx, format!("wasmkv.get./api/{}", todo)).await?;
     info!("Resp: {:?}", resp);
 
     let todo = serde_json::from_slice::<Todo>(&resp.body)?;
@@ -152,44 +136,20 @@ async fn get_todo(ctx: &Context, todo: &str) -> Result<Todo> {
 
 async fn delete_all_todos(ctx: &Context) -> Result<()> {
     info!("Deleting all todos...");
-    let _ = MessagingSender::new()
-        .request(
-            ctx,
-            &RequestMessage {
-                subject: format!("wasmkv.del"),
-                body: vec![],
-                timeout_ms: 1000,
-            },
-        )
-        .await?;
+    let _ = send_kv(ctx, "wasmkv.del".into()).await?;
     Ok(())
 }
 
 async fn delete_todo(ctx: &Context, url: &str) -> Result<()> {
     info!("Deleting a todo...");
-    let _ = MessagingSender::new()
-        .request(
-            ctx,
-            &RequestMessage {
-                subject: format!("wasmkv.del.{}", url),
-                body: vec![],
-                timeout_ms: 1000,
-            },
-        )
-        .await?;
+    let _ = send_kv(ctx, format!("wasmkv.del.{}", url)).await?;
     Ok(())
 }
 
 async fn handle_request(ctx: &Context, req: &HttpRequest) -> RpcResult<HttpResponse> {
     debug!("incoming req: {:?}", req);
 
-    //TODO: better way to trim both ends
-    let trimmed_path: Vec<&str> = req
-        .path
-        .trim_start_matches('/')
-        .trim_end_matches('/')
-        .split('/')
-        .collect();
+    let trimmed_path: Vec<&str> = req.path.trim_matches('/').split('/').collect();
     info!("Segments: {:?}", trimmed_path);
     match (req.method.as_ref(), trimmed_path.as_slice()) {
         ("POST", ["api"]) => match serde_json::from_slice(&req.body) {
@@ -265,6 +225,19 @@ async fn handle_request(ctx: &Context, req: &HttpRequest) -> RpcResult<HttpRespo
             Ok(HttpResponse::not_found())
         }
     }
+}
+
+async fn send_kv(ctx: &Context, subject: String) -> RpcResult<ReplyMessage> {
+    MessagingSender::new()
+        .request(
+            ctx,
+            &RequestMessage {
+                subject,
+                body: vec![],
+                timeout_ms: KV_REPLY_TIMEOUT_MS,
+            },
+        )
+        .await
 }
 
 #[derive(Debug, Default, Actor, HealthResponder)]
