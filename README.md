@@ -21,6 +21,14 @@ However, the real deployment architecture is completely flexible and as-demoed r
 
 ![actual deployment architecture](./cloud-arch.png)
 
+## Running this demo
+To run this demonstration across clouds and edges, you'll want to use [Cosmonic](https://get.cosmonic.com). You can run this demo with wasmCloud locally by:
+1. [Installing and running Redis](https://redis.io/docs/getting-started/)
+1. [Installing wash](https://wasmcloud.dev/overview/installation/)
+1. Run `wash up`
+1. Run `make start` in this repository to deploy all the WebAssembly modules and capability providers, then visit [http://localhost:8080](http://localhost:8080) to access the TODO app
+
+
 ## TODO
 
 - [ ] Implement the update operation on the TODO app
