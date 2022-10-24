@@ -24,7 +24,7 @@ However, the real deployment architecture is completely flexible and as-demoed r
 ## TODO
 
 - [ ] Implement the update operation on the TODO app
-- [ ] Add in config.jsons e.g. `{"url": "redis://elasticache_url.aws.com:6379"}` but with the real demo URLs once the resources are spun down.
+- [x] Add in config.jsons e.g. `{"url": "redis://elasticache_url.aws.com:6379"}`. Note, these are the real configuration files that were used for the demonstration, but the URLs have been changed and the clusters no longer exist.
 
 ## What does this not have?
 
